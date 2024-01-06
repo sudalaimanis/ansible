@@ -1,0 +1,62 @@
+---
+- name: Install Jenkins on all hosts
+  hosts: all
+  become: true
+
+  tasks:
+    - name: Update package cache
+      apt:
+        update_cache: yes
+
+    - name: Install fontconfig and OpenJDK 17 JRE
+      apt:
+        name: "{{ item }}"
+        state: present
+      loop:
+        - fontconfig
+        - openjdk-17-jre
+
+    - name: Download Jenkins GPG key
+      get_url:
+        url: https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key
+        dest: /usr/share/keyrings/jenkins-keyring.asc
+
+    - name: Add Jenkins repository
+      lineinfile:
+        dest: /etc/apt/sources.list.d/jenkins.list
+        line: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+        create: yes
+
+    - name: Update package cache after adding repository
+      apt:
+        update_cache: yes
+
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+
+    - name: Start Jenkins service
+      service:
+        name: jenkins
+        state: started
+        enabled: yes
+
+    - name: Pause for Jenkins to start
+      pause:
+        seconds: 30
+
+    - name: Retrieve Jenkins initial admin password
+      command: cat /var/lib/jenkins/secrets/initialAdminPassword
+      register: jenkins_initial_password
+
+- name: Save Jenkins initial admin password and host IP
+  hosts: 10.0.7.48
+  gather_facts: false
+
+  tasks:
+    - name: Create or append to the passwords file
+      lineinfile:
+        path: /home/ubuntu/ansible/passwords.txt  # Replace with your desired path
+        create: yes
+        line: "{{ inventory_hostname }}: {{ jenkins_initial_password.stdout }}"
